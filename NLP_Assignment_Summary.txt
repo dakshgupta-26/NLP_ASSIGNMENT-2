@@ -1,0 +1,95 @@
+ASSIGNMENT 2: FUNDAMENTAL LANGUAGE PROCESSING FOR THREE LANGUAGES
+========================================================================
+Input dataset: NLP_Three_Languages_Dataset.xlsx
+Data rows loaded: 50
+Non-empty language text cells processed: 150
+Expected aligned rows in the instructor-provided dataset: 50
+Python version: 3.12.10
+NLTK version: 3.10.3
+
+OPERATIONS IMPLEMENTED
+1. Unicode NFC normalization, case normalization, and whitespace cleanup.
+2. Rule-based sentence segmentation using English and Devanagari punctuation.
+3. Unicode-aware word tokenization for Latin and Devanagari scripts.
+4. Language-specific demonstration stop-word removal for English, Hindi, and Marathi.
+5. English Porter stemming when NLTK is installed; Hindi/Marathi stemming is not claimed.
+6. Word-frequency analysis and language-wise comparison.
+
+LANGUAGE-WISE RESULTS
+------------------------------------------------------------------------
+
+English
+  Non-empty source cells: 50
+  Sentences after segmentation: 50
+  Tokens before stop-word removal: 297
+  Tokens after stop-word removal: 223
+  Stop words removed: 74
+  Unique tokens after stop-word removal: 144
+  Average tokens per sentence: 5.94
+  Top 10 words after stop-word removal:
+    data: 14
+    language: 7
+    learning: 6
+    text: 6
+    students: 5
+    model: 5
+    analysis: 4
+    natural: 3
+    processing: 3
+    machine: 3
+
+Hindi
+  Non-empty source cells: 50
+  Sentences after segmentation: 50
+  Tokens before stop-word removal: 407
+  Tokens after stop-word removal: 250
+  Stop words removed: 157
+  Unique tokens after stop-word removal: 145
+  Average tokens per sentence: 8.14
+  Top 10 words after stop-word removal:
+    डेटा: 14
+    उपयोग: 8
+    भाषा: 7
+    पाठ: 6
+    कर: 6
+    मॉडल: 6
+    छात्र: 5
+    विश्लेषण: 5
+    लर्निंग: 4
+    जाता: 4
+
+Marathi
+  Non-empty source cells: 50
+  Sentences after segmentation: 50
+  Tokens before stop-word removal: 297
+  Tokens after stop-word removal: 256
+  Stop words removed: 41
+  Unique tokens after stop-word removal: 177
+  Average tokens per sentence: 5.94
+  Top 10 words after stop-word removal:
+    वापर: 8
+    डेटा: 7
+    भाषा: 6
+    प्रक्रिया: 5
+    विद्यार्थी: 5
+    करू: 4
+    केला: 4
+    जातो: 4
+    शकतात: 4
+    नैसर्गिक: 3
+
+ANALYSIS AND LIMITATIONS
+- Word-frequency analysis is used as the additional NLP task in this assignment.
+- English, Hindi, and Marathi results are counted separately because their word forms differ.
+- The stop-word lists are small, manually defined demonstration lists, not complete linguistic resources.
+- Stop-word removal can affect meaning; negation words such as 'not', 'नहीं', and 'नाही' are retained.
+- The sentence splitter is rule-based and may not handle every abbreviation or language-specific edge case.
+- English stemming uses NLTK PorterStemmer only when NLTK is installed.
+- Hindi and Marathi stemming/lemmatization has not been applied because no validated stemmer is configured.
+- POS tagging and named-entity recognition are not implemented; word-frequency analysis satisfies the chosen additional task.
+
+OUTPUT FILES
+  NLP_Processed_Output.csv: sentence-wise normalized text, tokens, stop-word removal and stemming status.
+  NLP_Word_Frequencies.csv: ranked word frequencies for all three languages.
+  NLP_Language_Comparison.csv: language-wise counts and comparison metrics.
+  NLP_Assignment_Summary.txt: this text report.
