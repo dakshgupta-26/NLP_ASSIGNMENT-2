@@ -1,4 +1,4 @@
-﻿Language,Non_Empty_Source_Cells,Sentences_After_Segmentation,Tokens_Before_Stopword_Removal,Tokens_After_Stopword_Removal,Stopwords_Removed,Unique_Tokens_After_Stopword_Removal,Average_Tokens_Per_Sentence,Stemming_Method
-English,50,50,297,223,74,144,5.94,NLTK PorterStemmer
-Hindi,50,50,407,250,157,145,8.14,Not applied (no language-specific stemmer configured)
-Marathi,50,50,297,256,41,177,5.94,Not applied (no language-specific stemmer configured)
+﻿Language,Raw_Characters,Non_Empty_Source_Cells,Sentences_After_Segmentation,Tokens_Including_Punctuation,Tokens_Before_Stopword_Removal,Unique_Tokens_Before_Stopword_Removal,Type_Token_Ratio_Before_Stopword_Removal,Tokens_After_Stopword_Removal,Stopwords_Removed,Stop_Word_List_Size,Unique_Tokens_After_Stopword_Removal,Average_Tokens_Per_Sentence,Stemming_Method,Stemming_Applied_Tokens,Unique_Stems
+English,2048,50,50,347,297,165,0.556,223,74,71,144,5.94,NLTK PorterStemmer,223,127
+Hindi,2186,50,50,457,407,168,0.413,250,157,75,145,8.14,Not applied (no language-specific stemmer configured),0,0
+Marathi,2084,50,50,347,297,190,0.640,256,41,71,177,5.94,Not applied (no language-specific stemmer configured),0,0

@@ -1,31 +1,38 @@
-ASSIGNMENT 2: FUNDAMENTAL LANGUAGE PROCESSING FOR THREE LANGUAGES
-========================================================================
+ASSIGNMENT 2: FUNDAMENTAL LANGUAGE PROCESSING FOR ENGLISH, HINDI AND MARATHI
+====================================================================================
 Input dataset: NLP_Three_Languages_Dataset.xlsx
 Data rows loaded: 50
 Non-empty language text cells processed: 150
-Expected aligned rows in the instructor-provided dataset: 50
 Python version: 3.12.10
 NLTK version: 3.10.3
 
 OPERATIONS IMPLEMENTED
 1. Unicode NFC normalization, case normalization, and whitespace cleanup.
 2. Rule-based sentence segmentation using English and Devanagari punctuation.
-3. Unicode-aware word tokenization for Latin and Devanagari scripts.
+3. Unicode-aware tokenization; combining marks in Devanagari text are preserved.
 4. Language-specific demonstration stop-word removal for English, Hindi, and Marathi.
-5. English Porter stemming when NLTK is installed; Hindi/Marathi stemming is not claimed.
+5. English Porter stemming when NLTK is installed; no Hindi/Marathi stemmer is claimed.
 6. Word-frequency analysis and language-wise comparison.
 
-LANGUAGE-WISE RESULTS
-------------------------------------------------------------------------
+FULL-DATASET LANGUAGE-WISE RESULTS
+------------------------------------------------------------------------------------
 
 English
+  Raw characters: 2048
   Non-empty source cells: 50
   Sentences after segmentation: 50
-  Tokens before stop-word removal: 297
+  Tokens including punctuation: 347
+  Word tokens before stop-word removal: 297
+  Unique word tokens before stop-word removal: 165
+  Type-token ratio before stop-word removal: 0.556
   Tokens after stop-word removal: 223
   Stop words removed: 74
+  Stop-word list size: 71
   Unique tokens after stop-word removal: 144
   Average tokens per sentence: 5.94
+  Stemming method: NLTK PorterStemmer
+  Stemming applied token count: 223
+  Unique stems: 127
   Top 10 words after stop-word removal:
     data: 14
     language: 7
@@ -39,13 +46,21 @@ English
     machine: 3
 
 Hindi
+  Raw characters: 2186
   Non-empty source cells: 50
   Sentences after segmentation: 50
-  Tokens before stop-word removal: 407
+  Tokens including punctuation: 457
+  Word tokens before stop-word removal: 407
+  Unique word tokens before stop-word removal: 168
+  Type-token ratio before stop-word removal: 0.413
   Tokens after stop-word removal: 250
   Stop words removed: 157
+  Stop-word list size: 75
   Unique tokens after stop-word removal: 145
   Average tokens per sentence: 8.14
+  Stemming method: Not applied (no language-specific stemmer configured)
+  Stemming applied token count: 0
+  Unique stems: 0
   Top 10 words after stop-word removal:
     डेटा: 14
     उपयोग: 8
@@ -59,13 +74,21 @@ Hindi
     जाता: 4
 
 Marathi
+  Raw characters: 2084
   Non-empty source cells: 50
   Sentences after segmentation: 50
-  Tokens before stop-word removal: 297
+  Tokens including punctuation: 347
+  Word tokens before stop-word removal: 297
+  Unique word tokens before stop-word removal: 190
+  Type-token ratio before stop-word removal: 0.640
   Tokens after stop-word removal: 256
   Stop words removed: 41
+  Stop-word list size: 71
   Unique tokens after stop-word removal: 177
   Average tokens per sentence: 5.94
+  Stemming method: Not applied (no language-specific stemmer configured)
+  Stemming applied token count: 0
+  Unique stems: 0
   Top 10 words after stop-word removal:
     वापर: 8
     डेटा: 7
@@ -78,18 +101,34 @@ Marathi
     शकतात: 4
     नैसर्गिक: 3
 
+COMPARATIVE SUMMARY
+------------------------------------------------------------------------------------
+Parameter                                        English        Hindi      Marathi
+------------------------------------------------------------------------------------
+Raw characters                                      2048         2186         2084
+Sentences processed                                   50           50           50
+Tokens including punctuation                         347          457          347
+Word tokens before stop-word removal                 297          407          297
+Unique tokens before stop-word removal               165          168          190
+Tokens after stop-word removal                       223          250          256
+Stop words removed                                    74          157           41
+Unique content tokens                                144          145          177
+Stop-word list size                                   71           75           71
+Stemming-applied tokens                              223            0            0
+Unique stems                                         127            0            0
+
 ANALYSIS AND LIMITATIONS
-- Word-frequency analysis is used as the additional NLP task in this assignment.
-- English, Hindi, and Marathi results are counted separately because their word forms differ.
+- Word-frequency analysis is the selected additional NLP task.
+- Word frequencies are calculated after stop-word removal.
 - The stop-word lists are small, manually defined demonstration lists, not complete linguistic resources.
-- Stop-word removal can affect meaning; negation words such as 'not', 'नहीं', and 'नाही' are retained.
+- The number of removed stop words depends on these lists and should not be interpreted as an inherent property of a language.
 - The sentence splitter is rule-based and may not handle every abbreviation or language-specific edge case.
 - English stemming uses NLTK PorterStemmer only when NLTK is installed.
 - Hindi and Marathi stemming/lemmatization has not been applied because no validated stemmer is configured.
-- POS tagging and named-entity recognition are not implemented; word-frequency analysis satisfies the chosen additional task.
+- POS tagging and named-entity recognition are not implemented; frequency analysis is the chosen additional task.
 
 OUTPUT FILES
-  NLP_Processed_Output.csv: sentence-wise normalized text, tokens, stop-word removal and stemming status.
+  NLP_Processed_Output.csv: sentence-level text, tokenization, removed stop words and stemming status.
   NLP_Word_Frequencies.csv: ranked word frequencies for all three languages.
-  NLP_Language_Comparison.csv: language-wise counts and comparison metrics.
+  NLP_Language_Comparison.csv: detailed full-dataset comparative metrics.
   NLP_Assignment_Summary.txt: this text report.

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import csv
+import os
 import posixpath
 import re
 import sys
+import textwrap
 import unicodedata
 import zipfile
 from collections import Counter
@@ -57,6 +59,53 @@ STOP_WORDS = {
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?।॥])\s+|[\r\n]+")
 WHITESPACE_RE = re.compile(r"\s+")
 SPACE_BEFORE_PUNCT_RE = re.compile(r"\s+([,.;:!?।॥])")
+
+
+# Professional terminal styling. Colours are shown in interactive terminals,
+# including the VS Code integrated terminal, and disabled for redirected output.
+COLOUR_ENABLED = sys.stdout.isatty() and "NO_COLOR" not in os.environ
+
+_COLOURS = {
+    "blue": "\033[94m",
+    "cyan": "\033[96m",
+    "green": "\033[92m",
+    "yellow": "\033[93m",
+    "magenta": "\033[95m",
+    "bold": "\033[1m",
+    "muted": "\033[90m",
+    "reset": "\033[0m",
+}
+
+
+def colour(text: Any, *styles: str) -> str:
+    """Apply ANSI styling only when supported by the current terminal."""
+    if not COLOUR_ENABLED:
+        return str(text)
+    prefix = "".join(_COLOURS.get(style, "") for style in styles)
+    return f"{prefix}{text}{_COLOURS['reset']}"
+
+
+def print_rule(char: str = "─", style: str = "cyan", width: int = 88) -> None:
+    print(colour(char * width, style))
+
+
+def print_banner(title: str, subtitle: Optional[str] = None) -> None:
+    print()
+    print_rule("═", "cyan", 88)
+    print(colour(title.center(88), "bold", "cyan"))
+    if subtitle:
+        print(colour(subtitle.center(88), "muted"))
+    print_rule("═", "cyan", 88)
+
+
+def print_section(title: str, style: str = "blue") -> None:
+    print()
+    print(colour(f"▸ {title}", "bold", style))
+    print(colour("─" * min(88, max(28, len(title) + 4)), "muted"))
+
+
+def print_status(label: str, value: Any) -> None:
+    print(f"  {colour(label + ':', 'muted')} {colour(value, 'green')}")
 
 
 def normalize_text(value: Any) -> str:
@@ -294,6 +343,154 @@ def write_csv(path: Path, headers: Sequence[str], rows: Sequence[Dict[str, Any]]
         writer.writerows(rows)
 
 
+
+def tokenize_with_punctuation(text: str) -> List[str]:
+    """Return word tokens plus standalone punctuation/symbol tokens for demonstration."""
+    tokens: List[str] = []
+    current: List[str] = []
+
+    def flush_current() -> None:
+        if current:
+            tokens.append("".join(current))
+            current.clear()
+
+    for char in text:
+        category = unicodedata.category(char)
+        if category.startswith("L") or category.startswith("N"):
+            current.append(char)
+        elif category.startswith("M") and current:
+            # Preserve Devanagari vowel signs, nukta and other combining marks.
+            current.append(char)
+        else:
+            flush_current()
+            if not char.isspace() and category[:1] in {"P", "S"}:
+                tokens.append(char)
+
+    flush_current()
+    return tokens
+
+
+def print_wrapped(label: str, value: str, width: int = 108) -> None:
+    """Print a long sample across readable terminal lines."""
+    print(label)
+    if not value:
+        print("   [empty]")
+        return
+    for line in textwrap.wrap(
+        value,
+        width=width,
+        break_long_words=False,
+        break_on_hyphens=False,
+        replace_whitespace=True,
+    ):
+        print("   " + line)
+
+
+def print_list_wrapped(label: str, values: Sequence[str], limit: Optional[int] = None) -> None:
+    shown = list(values if limit is None else values[:limit])
+    suffix = ""
+    if limit is not None and len(values) > limit:
+        suffix = f" ... [showing first {limit} of {len(values)}]"
+    print_wrapped(label, " | ".join(shown) + suffix)
+
+
+def print_detailed_walkthrough(
+    source_rows: List[Dict[str, Any]],
+    columns: Dict[str, str],
+    sample_rows: int = 7,
+) -> None:
+    """Display a step-by-step walkthrough using the first real rows from the dataset."""
+    print_banner(
+        f"DETAILED WALKTHROUGH | FIRST {sample_rows} DATASET ROWS",
+        "Language-wise NLP processing"
+    )
+
+    id_column = columns.get("id")
+
+    for language in LANGUAGES:
+        selected_rows: List[Tuple[str, str]] = []
+        for row_number, row in enumerate(source_rows, start=1):
+            text = str(row.get(columns[language.casefold()]) or "").strip()
+            if not text:
+                continue
+            row_id = display_id(row.get(id_column) if id_column else None, row_number)
+            selected_rows.append((row_id, text))
+            if len(selected_rows) >= sample_rows:
+                break
+
+        original_lines = [text for _, text in selected_rows]
+        normalized_lines = [normalize_text(text) for text in original_lines]
+        normalized_sample = "\n".join(normalized_lines)
+
+        print()
+        print_rule("═", "magenta", 88)
+        print(colour(f"  {language.upper()} — REPRESENTATIVE SAMPLES", "bold", "magenta"))
+        print_rule("═", "magenta", 88)
+
+        print("\n" + colour(f"[1] RAW TEXT — FIRST {len(selected_rows)} NON-EMPTY ROWS", "bold", "cyan"))
+        for row_id, text in selected_rows:
+            print_wrapped(f"   Dataset ID {row_id}:", text, width=103)
+
+        print("\n" + colour("[2] NORMALIZED TEXT", "bold", "cyan"))
+        for (row_id, _), normalized in zip(selected_rows, normalized_lines):
+            print_wrapped(f"   Dataset ID {row_id}:", normalized, width=103)
+        changed = any(raw != norm for raw, norm in zip(original_lines, normalized_lines))
+        print(f"   Normalization changed at least one sample: {changed}")
+
+        print("\n" + colour("[3] SENTENCE SEGMENTATION", "bold", "cyan"))
+        program_sentences: List[str] = []
+        for line in normalized_lines:
+            program_sentences.extend(split_sentences(line))
+        print(f"   Input dataset rows: {len(selected_rows)}")
+        print(f"   Sentences found in these rows: {len(program_sentences)}")
+        for index, sentence in enumerate(program_sentences, start=1):
+            print_wrapped(f"   S{index}:", sentence, width=103)
+
+        print("\n" + colour("[4] TOKENS INCLUDING PUNCTUATION", "bold", "cyan"))
+        punct_tokens = tokenize_with_punctuation(normalized_sample)
+        print(f"   Token count: {len(punct_tokens)}")
+        print_list_wrapped("   Tokens:", punct_tokens, limit=100)
+
+        print("\n" + colour("[5] WORDS AFTER PUNCTUATION REMOVAL", "bold", "cyan"))
+        words = tokenize(normalized_sample)
+        print(f"   Word tokens: {len(words)}")
+        print(f"   Unique word tokens: {len(set(words))}")
+        print_list_wrapped("   Words:", words, limit=100)
+
+        print("\n" + colour("[6] STOP-WORD REMOVAL", "bold", "cyan"))
+        stop_set = STOP_WORDS[language]
+        removed_words = [word for word in words if word.casefold() in stop_set]
+        content_words = remove_stop_words(words, language)
+        print(f"   Stop words removed ({len(removed_words)} occurrences):")
+        print_list_wrapped("   Removed:", removed_words, limit=100)
+        print(f"   Content words remaining: {len(content_words)}")
+        print_list_wrapped("   Content words:", content_words, limit=100)
+
+        print("\n" + colour("[7] STEMMING / LEMMATIZATION STATUS (FIRST 15 CONTENT WORDS)", "bold", "cyan"))
+        if language == "English" and ENGLISH_STEMMER is not None:
+            preview = [
+                f"{word} -> {ENGLISH_STEMMER.stem(word)}"
+                for word in content_words[:15]
+            ]
+            print_list_wrapped("   NLTK PorterStemmer:", preview, limit=15)
+            print("   Lemmatization: not applied (no lemmatizer configured).")
+        elif language == "English":
+            print("   English stemming skipped because NLTK is not installed.")
+            print("   Install using: python -m pip install nltk")
+        else:
+            print("   Stemming/lemmatization not applied: no validated language-specific")
+            print("   stemmer/lemmatizer is configured in this script.")
+
+        print("\n" + colour("[8] ADDITIONAL NLP TASK: WORD-FREQUENCY ANALYSIS", "bold", "cyan"))
+        sample_frequencies = Counter(content_words)
+        print(f"   Top content words: {sample_frequencies.most_common(10)}")
+
+    print()
+    print_rule("═", "cyan", 88)
+    print(colour("REPRESENTATIVE WALKTHROUGH COMPLETE", "bold", "green"))
+    print_rule("═", "cyan", 88)
+
+
 def run() -> None:
     input_path = locate_dataset()
     if input_path.suffix.casefold() == ".csv":
@@ -308,14 +505,21 @@ def run() -> None:
 
     processed_rows: List[Dict[str, Any]] = []
     word_counts: Dict[str, Counter] = {language: Counter() for language in LANGUAGES}
+    all_word_counts: Dict[str, Counter] = {language: Counter() for language in LANGUAGES}
+    stem_counts: Dict[str, Counter] = {language: Counter() for language in LANGUAGES}
     stats: Dict[str, Dict[str, Any]] = {
         language: {
             "non_empty_cells": 0,
+            "raw_characters": 0,
             "sentences": 0,
+            "tokens_including_punctuation": 0,
             "tokens_before_stopword_removal": 0,
             "tokens_after_stopword_removal": 0,
             "stopwords_removed": 0,
+            "unique_tokens_before_stopword_removal": 0,
             "unique_tokens_after_stopword_removal": 0,
+            "stemming_applied_tokens": 0,
+            "unique_stems": 0,
         }
         for language in LANGUAGES
     }
@@ -330,23 +534,30 @@ def run() -> None:
                 continue
 
             stats[language]["non_empty_cells"] += 1
+            stats[language]["raw_characters"] += len(original)
             normalized_full = normalize_text(original)
             sentences = split_sentences(normalized_full)
             if not sentences and normalized_full:
                 sentences = [normalized_full]
 
             for sentence_number, sentence in enumerate(sentences, start=1):
+                tokens_with_punctuation = tokenize_with_punctuation(sentence)
                 tokens = tokenize(sentence)
                 filtered_tokens = remove_stop_words(tokens, language)
+                removed_tokens = [token for token in tokens if token.casefold() in STOP_WORDS[language]]
                 stemmed_tokens, stemming_status = stem_tokens(filtered_tokens, language)
 
-                for token in filtered_tokens:
-                    word_counts[language][token] += 1
+                all_word_counts[language].update(tokens)
+                word_counts[language].update(filtered_tokens)
+                if stemmed_tokens:
+                    stem_counts[language].update(stemmed_tokens)
 
                 stats[language]["sentences"] += 1
+                stats[language]["tokens_including_punctuation"] += len(tokens_with_punctuation)
                 stats[language]["tokens_before_stopword_removal"] += len(tokens)
                 stats[language]["tokens_after_stopword_removal"] += len(filtered_tokens)
-                stats[language]["stopwords_removed"] += len(tokens) - len(filtered_tokens)
+                stats[language]["stopwords_removed"] += len(removed_tokens)
+                stats[language]["stemming_applied_tokens"] += len(stemmed_tokens)
 
                 processed_rows.append({
                     "ID": row_id,
@@ -354,15 +565,19 @@ def run() -> None:
                     "Sentence_No": sentence_number,
                     "Original_Text": original,
                     "Normalized_Text": sentence,
+                    "Tokens_With_Punctuation": " | ".join(tokens_with_punctuation),
                     "Tokens_Before_Stopword_Removal": " | ".join(tokens),
+                    "Stopwords_Removed": " | ".join(removed_tokens),
                     "Tokens_After_Stopword_Removal": " | ".join(filtered_tokens),
                     "Stemmed_Tokens": " | ".join(stemmed_tokens),
-                    "Stopwords_Removed_Count": len(tokens) - len(filtered_tokens),
+                    "Stopwords_Removed_Count": len(removed_tokens),
                     "Stemming_Status": stemming_status,
                 })
 
     for language in LANGUAGES:
+        stats[language]["unique_tokens_before_stopword_removal"] = len(all_word_counts[language])
         stats[language]["unique_tokens_after_stopword_removal"] = len(word_counts[language])
+        stats[language]["unique_stems"] = len(stem_counts[language])
 
     processed_path = BASE_DIR / "NLP_Processed_Output.csv"
     frequencies_path = BASE_DIR / "NLP_Word_Frequencies.csv"
@@ -371,8 +586,9 @@ def run() -> None:
 
     processed_headers = [
         "ID", "Language", "Sentence_No", "Original_Text", "Normalized_Text",
-        "Tokens_Before_Stopword_Removal", "Tokens_After_Stopword_Removal",
-        "Stemmed_Tokens", "Stopwords_Removed_Count", "Stemming_Status",
+        "Tokens_With_Punctuation", "Tokens_Before_Stopword_Removal", "Stopwords_Removed",
+        "Tokens_After_Stopword_Removal", "Stemmed_Tokens", "Stopwords_Removed_Count",
+        "Stemming_Status",
     ]
     write_csv(processed_path, processed_headers, processed_rows)
 
@@ -394,6 +610,10 @@ def run() -> None:
             item["tokens_before_stopword_removal"] / item["sentences"]
             if item["sentences"] else 0
         )
+        ttr = (
+            item["unique_tokens_before_stopword_removal"] / item["tokens_before_stopword_removal"]
+            if item["tokens_before_stopword_removal"] else 0
+        )
         if language == "English" and ENGLISH_STEMMER is not None:
             stemming_method = "NLTK PorterStemmer"
         elif language == "English":
@@ -402,37 +622,43 @@ def run() -> None:
             stemming_method = "Not applied (no language-specific stemmer configured)"
         comparison_rows.append({
             "Language": language,
+            "Raw_Characters": item["raw_characters"],
             "Non_Empty_Source_Cells": item["non_empty_cells"],
             "Sentences_After_Segmentation": item["sentences"],
+            "Tokens_Including_Punctuation": item["tokens_including_punctuation"],
             "Tokens_Before_Stopword_Removal": item["tokens_before_stopword_removal"],
+            "Unique_Tokens_Before_Stopword_Removal": item["unique_tokens_before_stopword_removal"],
+            "Type_Token_Ratio_Before_Stopword_Removal": f"{ttr:.3f}",
             "Tokens_After_Stopword_Removal": item["tokens_after_stopword_removal"],
             "Stopwords_Removed": item["stopwords_removed"],
+            "Stop_Word_List_Size": len(STOP_WORDS[language]),
             "Unique_Tokens_After_Stopword_Removal": item["unique_tokens_after_stopword_removal"],
             "Average_Tokens_Per_Sentence": f"{average_tokens:.2f}",
             "Stemming_Method": stemming_method,
+            "Stemming_Applied_Tokens": item["stemming_applied_tokens"],
+            "Unique_Stems": item["unique_stems"],
         })
     write_csv(comparison_path, list(comparison_rows[0].keys()), comparison_rows)
 
     summary_lines = [
-        "ASSIGNMENT 2: FUNDAMENTAL LANGUAGE PROCESSING FOR THREE LANGUAGES",
-        "=" * 72,
+        "ASSIGNMENT 2: FUNDAMENTAL LANGUAGE PROCESSING FOR ENGLISH, HINDI AND MARATHI",
+        "=" * 84,
         f"Input dataset: {input_path.name}",
         f"Data rows loaded: {len(source_rows)}",
         f"Non-empty language text cells processed: {sum(stats[language]['non_empty_cells'] for language in LANGUAGES)}",
-        f"Expected aligned rows in the instructor-provided dataset: {EXPECTED_SENTENCE_ROWS}",
         f"Python version: {sys.version.split()[0]}",
         f"NLTK version: {NLTK_VERSION}",
         "",
         "OPERATIONS IMPLEMENTED",
         "1. Unicode NFC normalization, case normalization, and whitespace cleanup.",
         "2. Rule-based sentence segmentation using English and Devanagari punctuation.",
-        "3. Unicode-aware word tokenization for Latin and Devanagari scripts.",
+        "3. Unicode-aware tokenization; combining marks in Devanagari text are preserved.",
         "4. Language-specific demonstration stop-word removal for English, Hindi, and Marathi.",
-        "5. English Porter stemming when NLTK is installed; Hindi/Marathi stemming is not claimed.",
+        "5. English Porter stemming when NLTK is installed; no Hindi/Marathi stemmer is claimed.",
         "6. Word-frequency analysis and language-wise comparison.",
         "",
-        "LANGUAGE-WISE RESULTS",
-        "-" * 72,
+        "FULL-DATASET LANGUAGE-WISE RESULTS",
+        "-" * 84,
     ]
 
     for language in LANGUAGES:
@@ -441,16 +667,28 @@ def run() -> None:
             item["tokens_before_stopword_removal"] / item["sentences"]
             if item["sentences"] else 0
         )
+        ttr = (
+            item["unique_tokens_before_stopword_removal"] / item["tokens_before_stopword_removal"]
+            if item["tokens_before_stopword_removal"] else 0
+        )
         summary_lines.extend([
             "",
             language,
+            f"  Raw characters: {item['raw_characters']}",
             f"  Non-empty source cells: {item['non_empty_cells']}",
             f"  Sentences after segmentation: {item['sentences']}",
-            f"  Tokens before stop-word removal: {item['tokens_before_stopword_removal']}",
+            f"  Tokens including punctuation: {item['tokens_including_punctuation']}",
+            f"  Word tokens before stop-word removal: {item['tokens_before_stopword_removal']}",
+            f"  Unique word tokens before stop-word removal: {item['unique_tokens_before_stopword_removal']}",
+            f"  Type-token ratio before stop-word removal: {ttr:.3f}",
             f"  Tokens after stop-word removal: {item['tokens_after_stopword_removal']}",
             f"  Stop words removed: {item['stopwords_removed']}",
+            f"  Stop-word list size: {len(STOP_WORDS[language])}",
             f"  Unique tokens after stop-word removal: {item['unique_tokens_after_stopword_removal']}",
             f"  Average tokens per sentence: {average_tokens:.2f}",
+            f"  Stemming method: {comparison_rows[LANGUAGES.index(language)]['Stemming_Method']}",
+            f"  Stemming applied token count: {item['stemming_applied_tokens']}",
+            f"  Unique stems: {item['unique_stems']}",
             "  Top 10 words after stop-word removal:",
         ])
         top_words = word_counts[language].most_common(10)
@@ -461,56 +699,125 @@ def run() -> None:
 
     summary_lines.extend([
         "",
+        "COMPARATIVE SUMMARY",
+        "-" * 84,
+        f"{'Parameter':<43} {'English':>12} {'Hindi':>12} {'Marathi':>12}",
+        "-" * 84,
+    ])
+    comparison_specs = [
+        ("Raw characters", "raw_characters"),
+        ("Sentences processed", "sentences"),
+        ("Tokens including punctuation", "tokens_including_punctuation"),
+        ("Word tokens before stop-word removal", "tokens_before_stopword_removal"),
+        ("Unique tokens before stop-word removal", "unique_tokens_before_stopword_removal"),
+        ("Tokens after stop-word removal", "tokens_after_stopword_removal"),
+        ("Stop words removed", "stopwords_removed"),
+        ("Unique content tokens", "unique_tokens_after_stopword_removal"),
+        ("Stop-word list size", None),
+        ("Stemming-applied tokens", "stemming_applied_tokens"),
+        ("Unique stems", "unique_stems"),
+    ]
+    for label, key in comparison_specs:
+        values = []
+        for language in LANGUAGES:
+            value = len(STOP_WORDS[language]) if key is None else stats[language][key]
+            values.append(str(value))
+        summary_lines.append(f"{label:<43} {values[0]:>12} {values[1]:>12} {values[2]:>12}")
+
+    summary_lines.extend([
+        "",
         "ANALYSIS AND LIMITATIONS",
-        "- Word-frequency analysis is used as the additional NLP task in this assignment.",
-        "- English, Hindi, and Marathi results are counted separately because their word forms differ.",
+        "- Word-frequency analysis is the selected additional NLP task.",
+        "- Word frequencies are calculated after stop-word removal.",
         "- The stop-word lists are small, manually defined demonstration lists, not complete linguistic resources.",
-        "- Stop-word removal can affect meaning; negation words such as 'not', 'नहीं', and 'नाही' are retained.",
+        "- The number of removed stop words depends on these lists and should not be interpreted as an inherent property of a language.",
         "- The sentence splitter is rule-based and may not handle every abbreviation or language-specific edge case.",
         "- English stemming uses NLTK PorterStemmer only when NLTK is installed.",
         "- Hindi and Marathi stemming/lemmatization has not been applied because no validated stemmer is configured.",
-        "- POS tagging and named-entity recognition are not implemented; word-frequency analysis satisfies the chosen additional task.",
+        "- POS tagging and named-entity recognition are not implemented; frequency analysis is the chosen additional task.",
         "",
         "OUTPUT FILES",
-        f"  {processed_path.name}: sentence-wise normalized text, tokens, stop-word removal and stemming status.",
+        f"  {processed_path.name}: sentence-level text, tokenization, removed stop words and stemming status.",
         f"  {frequencies_path.name}: ranked word frequencies for all three languages.",
-        f"  {comparison_path.name}: language-wise counts and comparison metrics.",
+        f"  {comparison_path.name}: detailed full-dataset comparative metrics.",
         f"  {summary_path.name}: this text report.",
     ])
     summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
 
-    print("\n========== MULTILINGUAL NLP ASSIGNMENT RESULTS ==========")
-    print(f"Dataset: {input_path.name}")
-    print(f"Data rows loaded: {len(source_rows)}")
-    print(f"Text samples processed: {sum(stats[language]['non_empty_cells'] for language in LANGUAGES)}")
-    print(f"NLTK: {NLTK_VERSION}")
+    print_banner(
+        "MULTILINGUAL NLP ASSIGNMENT — RESULTS",
+        "Fundamental Language Processing | English • Hindi • Marathi"
+    )
+    print_status("Dataset", input_path.name)
+    print_status("Data rows loaded", len(source_rows))
+    print_status("Text samples processed", sum(stats[language]["non_empty_cells"] for language in LANGUAGES))
+    print_status("Python version", sys.version.split()[0])
+    print_status("NLTK version", NLTK_VERSION)
 
+    print_section("FULL-DATASET COMPARATIVE SUMMARY", "cyan")
+    print(
+        colour(f"{'Metric':<42}", "bold", "yellow")
+        + colour(f"{'English':>10}", "bold", "yellow")
+        + colour(f"{'Hindi':>10}", "bold", "yellow")
+        + colour(f"{'Marathi':>10}", "bold", "yellow")
+    )
+    print_rule("─", "muted", 72)
+
+    final_metrics = [
+        ("Raw characters", "raw_characters"),
+        ("Sentences", "sentences"),
+        ("Tokens including punctuation", "tokens_including_punctuation"),
+        ("Tokens before stop-word removal", "tokens_before_stopword_removal"),
+        ("Unique tokens before removal", "unique_tokens_before_stopword_removal"),
+        ("Tokens after stop-word removal", "tokens_after_stopword_removal"),
+        ("Stop words removed", "stopwords_removed"),
+        ("Unique tokens after removal", "unique_tokens_after_stopword_removal"),
+    ]
+    for label, key in final_metrics:
+        vals = [str(stats[language][key]) for language in LANGUAGES]
+        print(
+            colour(f"{label:<42}", "muted")
+            + "".join(colour(f"{value:>10}", "green") for value in vals)
+        )
+
+    ttr_values = []
     for language in LANGUAGES:
-        item = stats[language]
-        avg = item["tokens_before_stopword_removal"] / item["sentences"] if item["sentences"] else 0
-        print(f"\n{language}")
-        print(f"  Sentences: {item['sentences']}")
-        print(f"  Tokens before stop-word removal: {item['tokens_before_stopword_removal']}")
-        print(f"  Tokens after stop-word removal:  {item['tokens_after_stopword_removal']}")
-        print(f"  Stop words removed: {item['stopwords_removed']}")
-        print(f"  Unique tokens after stop-word removal: {item['unique_tokens_after_stopword_removal']}")
-        print(f"  Average tokens per sentence: {avg:.2f}")
-        print(f"  Top 10 words: {word_counts[language].most_common(10)}")
+        total = stats[language]["tokens_before_stopword_removal"]
+        unique = stats[language]["unique_tokens_before_stopword_removal"]
+        ttr_values.append(f"{(unique / total):.3f}" if total else "0.000")
+    print(
+        colour(f"{'Type-token ratio (before removal)':<42}", "muted")
+        + "".join(colour(f"{value:>10}", "green") for value in ttr_values)
+    )
+    list_sizes = [str(len(STOP_WORDS[language])) for language in LANGUAGES]
+    print(
+        colour(f"{'Stop-word list size':<42}", "muted")
+        + "".join(colour(f"{value:>10}", "green") for value in list_sizes)
+    )
+    stem_counts_text = [
+        str(stats[language]["stemming_applied_tokens"])
+        for language in LANGUAGES
+    ]
+    print(
+        colour(f"{'Tokens stemmed':<42}", "muted")
+        + "".join(colour(f"{value:>10}", "green") for value in stem_counts_text)
+    )
 
-    print("\n========== OUTPUT FILES CREATED ==========")
-    for path in (processed_path, frequencies_path, comparison_path, summary_path):
-        print(f"{path.name}")
+    print_section("MOST FREQUENT WORDS — FULL DATASET", "blue")
+    for language in LANGUAGES:
+        print(colour(f"  {language}", "bold", "magenta"))
+        for word, count in word_counts[language].most_common(10):
+            print(f"    {colour(word, 'green')}: {colour(count, 'yellow')}")
 
-    if ENGLISH_STEMMER is None:
-        print("\nNOTE: NLTK is not installed, so English stemming was skipped.")
-        print("Install it with: python -m pip install nltk")
+    print_section("OUTPUT FILES GENERATED", "cyan")
+    output_paths = (processed_path, frequencies_path, comparison_path, summary_path)
+    for number, path in enumerate(output_paths, start=1):
+        print(f"  {colour(f'[{number}]', 'yellow')} {colour(path.name, 'green')}")
 
-    print("\nImportant: Review the output and explain the limitations in your assignment report.")
-
+    # Print the real first seven rows only after the full-dataset summary.
+    print_detailed_walkthrough(source_rows, columns, sample_rows=7)
 
 def main() -> None:
-    # This message confirms that the script's entry point is actually running.
-    print("[INFO] Multilingual NLP script started.", flush=True)
     try:
         run()
     except (OSError, zipfile.BadZipFile, ET.ParseError, csv.Error, ValueError, KeyError) as error:
